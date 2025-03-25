@@ -49,7 +49,7 @@ def get_args_parser():
         "--batch-size",
         type=int,
         help="Batch size for feature extraction",
-        default=1024
+        default=512
     )
     return parser
 
