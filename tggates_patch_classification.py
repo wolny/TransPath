@@ -187,7 +187,8 @@ def main(args):
         print(f"Class {lesion_class} AUC: {auc}")
         auc_scores[lesion_class] = auc
 
-    avg_auc = np.mean(auc_scores.values())
+    auc_score_list = list(auc_scores.values())
+    avg_auc = np.mean(auc_score_list)
     print(f"Average AUC: {avg_auc}")
     # save output to a file
     torch.save(auc_scores, output_dir / "patch_classification_auc_scores.pth")
