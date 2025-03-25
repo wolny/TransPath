@@ -189,6 +189,8 @@ def main(args):
 
     avg_auc = np.mean(auc_scores.values())
     print(f"Average AUC: {avg_auc}")
+    # save output to a file
+    torch.save(auc_scores, output_dir / "patch_classification_auc_scores.pth")
 
 
 if __name__ == '__main__':
