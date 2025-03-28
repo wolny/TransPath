@@ -4,7 +4,6 @@ import os
 from pathlib import Path
 
 import boto3
-import pandas as pd
 import torch
 import torch.distributed as dist
 import torch.nn as nn
