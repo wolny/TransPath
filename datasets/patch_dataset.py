@@ -8,11 +8,11 @@ from datasets.io import load_patches
 
 
 class PatchDataset(Dataset):
-    def __init__(self, patch_file: Path, augs: Callable, s3_client=None, patch_size: int = 256):
+    def __init__(self, patch_file: Path, augs: Callable, s3_client=None, bucket_name=None, patch_size: int = 256):
         super(PatchDataset, self).__init__()
         if s3_client is not None:
             file = io.BytesIO()
-            s3_client.download_fileobj(self.bucket_name, patch_file, file)
+            s3_client.download_fileobj(bucket_name, patch_file, file)
             file.seek(0)
         else:
             file = patch_file

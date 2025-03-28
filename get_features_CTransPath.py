@@ -23,9 +23,10 @@ test_transforms = transforms.Compose(
     [
         transforms.Resize(224),
         transforms.ToTensor(),
-        transforms.Normalize(mean = mean, std = std)
+        transforms.Normalize(mean=mean, std=std)
     ]
 )
+
 
 def get_args_parser():
     parser = argparse.ArgumentParser()
@@ -54,6 +55,7 @@ def get_args_parser():
         default=512
     )
     return parser
+
 
 def main(args):
     # setup distributed training if necessary
@@ -96,6 +98,7 @@ def main(args):
         s3_client = boto3.client("s3")
     else:
         s3_client = None
+        bucket_name = None
         # create output_dir if necessary
         output_dir = Path(args.output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
@@ -111,7 +114,7 @@ def main(args):
     for patch_file in file_list:
         # extract features
         feature_list = []
-        dataset = PatchDataset(patch_file, test_transforms, s3_client=s3_client)
+        dataset = PatchDataset(patch_file, test_transforms, s3_client=s3_client, bucket_name=bucket_name)
         loader = DataLoader(dataset=dataset, batch_size=args.batch_size, num_workers=8, pin_memory=True)
         if rank == 0:
             loader = tqdm.tqdm(loader, total=len(loader))
@@ -127,7 +130,7 @@ def main(args):
             output_path = output_dir / f"{Path(patch_file).stem}.pth"
             # skip first part of output_path if the same as bucket_name
             if output_path.startswith(bucket_name):
-                output_path = output_path[len(bucket_name) + 1 :]
+                output_path = output_path[len(bucket_name) + 1:]
             file = io.BytesIO()
             torch.save(patch_features, file)
             file.seek(0)
@@ -140,8 +143,6 @@ def main(args):
         # synchronize processes
         dist.barrier()
         dist.destroy_process_group()
-
-
 
 
 if __name__ == '__main__':
