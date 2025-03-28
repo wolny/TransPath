@@ -1,18 +1,21 @@
 import argparse
+import io
 import os
 from pathlib import Path
 
+import boto3
 import pandas as pd
-import torch, torchvision
-import torch.nn as nn
-from torchvision import transforms
-from PIL import Image
-from torch.utils.data import Dataset
-from torch.utils.data import DataLoader
-from ctran import ctranspath
+import torch
 import torch.distributed as dist
+import torch.nn as nn
+import torchvision
 import tqdm
+from PIL import Image
+from torch.utils.data import DataLoader
+from torch.utils.data import Dataset
+from torchvision import transforms
 
+from ctran import ctranspath
 from datasets.patch_dataset import PatchDataset
 
 mean = (0.485, 0.456, 0.406)
@@ -75,11 +78,31 @@ def main(args):
     model = model.to(device)
     model.eval()
 
-    # create output_dir if necessary
-    output_dir = Path(args.output_dir)
-    output_dir.mkdir(parents=True, exist_ok=True)
-    # load h5 files
-    patch_files = list(Path(args.dataset_dir).rglob("*.h5"))
+    is_s3 = args.dataset_dir.startswith("s3://")
+
+    if is_s3:
+
+        dataset_dir = args.dataset_dir
+        output_dir = args.output_dir
+        # remove s3:// prefix if necessary
+        if dataset_dir.startswith("s3://"):
+            dataset_dir = dataset_dir[5:]
+        if output_dir.startswith("s3://"):
+            output_dir = output_dir[5:]
+
+        bucket_name = Path(dataset_dir).parts[0]
+        bucket = boto3.resource("s3").Bucket(bucket_name)
+        prefix = "/".join(Path(dataset_dir).parts[1:])
+        patch_files = list([obj.key for obj in bucket.objects.filter(Prefix=prefix)])
+        s3_client = boto3.client("s3")
+    else:
+        s3_client = None
+        # create output_dir if necessary
+        output_dir = Path(args.output_dir)
+        output_dir.mkdir(parents=True, exist_ok=True)
+        # load h5 files
+        patch_files = list(Path(args.dataset_dir).rglob("*.h5"))
+
     # split files between processes
     file_list = patch_files[rank:: world_size]
     if rank == 0:
@@ -87,15 +110,10 @@ def main(args):
         file_list = tqdm.tqdm(file_list)
 
     for patch_file in file_list:
-        # skip files that have already been processed
-        output_path = output_dir / f"{patch_file.stem}.pth"
-        if output_path.exists():
-            continue
-
         # extract features
         feature_list = []
-        dataset = PatchDataset(patch_file, test_transforms)
-        loader = DataLoader(dataset=dataset, batch_size=args.batch_size, num_workers=32, pin_memory=True)
+        dataset = PatchDataset(patch_file, test_transforms, s3_client=s3_client)
+        loader = DataLoader(dataset=dataset, batch_size=args.batch_size, num_workers=8, pin_memory=True)
         if rank == 0:
             loader = tqdm.tqdm(loader, total=len(loader))
 
@@ -106,7 +124,18 @@ def main(args):
         patch_features = torch.cat(feature_list, dim=0)
 
         # save features
-        torch.save(patch_features, output_path)
+        if is_s3:
+            output_path = output_dir / f"{Path(patch_file).stem}.pth"
+            # skip first part of output_path if the same as bucket_name
+            if output_path.startswith(bucket_name):
+                output_path = output_path[len(bucket_name) + 1 :]
+            file = io.BytesIO()
+            torch.save(patch_features, file)
+            file.seek(0)
+            s3_client.upload_fileobj(file, bucket_name, output_path)
+        else:
+            output_path = output_dir / f"{patch_file.stem}.pth"
+            torch.save(patch_features, output_path)
 
     if is_distributed:
         # synchronize processes

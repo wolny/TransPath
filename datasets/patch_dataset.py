@@ -3,13 +3,21 @@ from typing import Callable
 
 from torch.utils.data import Dataset
 
+import io
 from datasets.io import load_patches
 
 
 class PatchDataset(Dataset):
-    def __init__(self, patch_file: Path, augs: Callable, patch_size: int = 256):
+    def __init__(self, patch_file: Path, augs: Callable, s3_client=None, patch_size: int = 256):
         super(PatchDataset, self).__init__()
-        self.patches = load_patches(patch_file, str(patch_size))
+        if s3_client is not None:
+            file = io.BytesIO()
+            self.s3_client.download_fileobj(self.bucket_name, patch_file, file)
+            file.seek(0)
+        else:
+            file = patch_file
+
+        self.patches = load_patches(file, str(patch_size))
         self.augs = augs
 
     def __len__(self):
