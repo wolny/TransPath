@@ -12,7 +12,7 @@ class PatchDataset(Dataset):
         super(PatchDataset, self).__init__()
         if s3_client is not None:
             file = io.BytesIO()
-            self.s3_client.download_fileobj(self.bucket_name, patch_file, file)
+            s3_client.download_fileobj(self.bucket_name, patch_file, file)
             file.seek(0)
         else:
             file = patch_file
