@@ -127,7 +127,7 @@ def main(args):
 
         # save features
         if is_s3:
-            output_path = output_dir / f"{Path(patch_file).stem}.pth"
+            output_path = str(Path(output_dir) / f"{Path(patch_file).stem}.pth")
             # skip first part of output_path if the same as bucket_name
             if output_path.startswith(bucket_name):
                 output_path = output_path[len(bucket_name) + 1:]
